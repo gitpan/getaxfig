@@ -1,0 +1,162 @@
+#!/usr/bin/perl -w
+
+#\section{Working Around the ApplixGraphics' Broken EPS Export with the `getaxfig' Script}
+
+# Copyright 1995-1997 Chris Traxler <christoph.t.traxler@theo.physik.uni-giessen.de>
+# The GNU General Public License applies.
+# You may use and alter this script. I kindly ask you to send me your improved version. 
+# You can produce a beautified listing of this program with the "listing" utility
+# retrievable from my homepage http://krabat.physik.uni-giessen.de/~traxler/
+
+use strict;
+use English;
+
+#\subsection{Command-Line Parsing}
+
+my $version='$Id: getaxfig,v 1.3 1998/02/04 16:48:35 cvstraxler Exp $';
+$version =~ s/^.*getaxfig,v ([0-9.\/ ]*) ..:..:.. cvs.*$/$1/;
+
+if($#ARGV!=1 && $#ARGV!=3)
+{
+    print <<EOF;
+getaxfig rev $version. To receive help, type 'perldoc $0' 
+Copyright 1998 by Chris Traxler <christoph.t.traxler\@theo.physik.uni-giessen.de>.
+EOF
+
+    exit;
+}
+
+#\subsection{Processing a Faulty ApplixGraphics EPS File}
+
+open(IN, "<$ENV{'HOME'}/axhome/$ARGV[0]") || die "Cannot open input file $ENV{'HOME'}/axhome/$ARGV[0]!\n";
+
+# slurp in the whole file
+$/=undef;
+my $infile=<IN>;
+
+my ($xmin, $ymin, $xmax, $ymax);
+
+if($#ARGV==3)
+{
+    my $unit;
+
+    ($xmax, $unit) = ($ARGV[2] =~ m/([0-9.]*)((cm|in)?)/);
+    $xmax *= 72;
+    $xmax /= 2.54 unless($unit eq 'in');
+
+    ($ymax, $unit) = ($ARGV[3] =~ m/([0-9.]*)((cm|in)?)/);
+    $ymax *= 72;
+    $ymax /= 2.54 unless($unit eq 'in');
+
+    $xmin=$ymin=0;
+}
+else
+{   
+    my $pat = '\%\%BeginPageSetup(.|\n)*?';
+    $pat .= '\n([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+([0-9]+)\s+DOCLIPBOX';
+    $pat .= '(.|\n)*?\n\%\%EndPageSetup';
+
+    die <<EOF unless($infile =~ /$pat/);
+Cannot extract the BoundingBox information!
+Please call me again using the long calling syntax 
+$0 <axps> <dest> <width> <height>.
+EOF
+
+    my $scale=0.071981861;
+    $xmin = $2 * $scale;
+    $ymax = $3 * $scale;
+    $xmax = $4 * $scale;
+    $ymin = $5 * $scale;
+}
+
+open(OUT, ">$ARGV[1]") || die "Cannot open output file $ARGV[1]!\n";
+
+my $headerdone=0;
+my @lines=split("\n", $infile);  
+foreach (@lines)
+{ 
+  if($headerdone)
+   {
+     print OUT $_."\n";
+   }
+  else
+   {
+     if(/BoundingBox/ || ! /^%/ || /^%.*End/)
+      {
+        print OUT "%%BoundingBox: $xmin $ymin $xmax $ymax\n";
+	print OUT $_."\n" if /^%.*End/;
+        $headerdone=1;
+	next;
+      }
+     print OUT $_."\n";
+   }
+}
+
+system "rm -f $ENV{'HOME'}/axhome/$ARGV[0]";
+
+#\subsection{POD (Plain Old Documentation)}
+
+=head1 NAME
+
+getaxfig - fixes faulty EPS files exported by ApplixGraphics
+
+=head1 SYNOPSIS
+
+B<getaxfig> I<axps> I<dest> [ I<width> I<height> ]
+
+where I<axps> is the filename of an ApplixGraphics exported EPS file (like 1.ps) relative to ~/axhome/
+and I<dest> is the filename of the desired destination file (like figure.eps) relative to the current
+directory. I<width> and I<height> are sizes like 1in or 2.5cm (default is cm); they are converted to 
+the BoundingBox of the output file. Usually, B<getaxfig> determines these numbers by scanning the 
+input file. 
+
+=head1 DESCRIPTION
+
+To produce an EPS figure with ApplixGraphics that can be included in LaTeX documents:
+
+=over 8
+
+=item o
+
+Make sure you are using only Type1 fonts. I don't know about TrueType;  
+they may or may not work...
+
+=item o
+
+Print into a file; usually ApplixGraphics suggests ~/axhome/1.ps
+
+=item o
+
+When printing, use exactly the paper size you need for the figure (e.g., 2x3 inches).
+Set the margins to zero width.
+
+=item o
+
+Call getaxfig as shown above.
+
+=back
+		
+=head1 EXAMPLES
+
+Standard call:
+
+getaxfig 1.ps fig1.eps           
+
+This tries to extract the width/height from file.
+To specify the width/height (centimeters by default):
+
+getaxfig 2.ps fig2.eps 5 8       
+
+getaxfig 2.ps fig2.eps 5in 8in
+
+B<getaxfig> can be retrieved from any CPAN mirror or from ftp://krabat.physik.uni-giessen.de/pub/traxler/
+
+=cut
+
+
+
+
+
+
+
+
